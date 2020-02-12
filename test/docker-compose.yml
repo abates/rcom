@@ -1,0 +1,14 @@
+version: '3'
+
+services:
+  client:
+    image: abates/rcom
+    stdin_open: true
+    tty: true
+    depends_on:
+      - "server"
+  server:
+    tty: true
+    environment:
+      START_SSHD: "true"
+    image: abates/rcom
