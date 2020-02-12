@@ -4,12 +4,15 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"os"
 	"path/filepath"
 
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/terminal"
 )
+
+var Logger = log.New(ioutil.Discard, "", 0)
 
 type Config struct {
 	acceptNew      bool // acceptNew entries to known_hosts

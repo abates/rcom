@@ -127,13 +127,13 @@ func GenerateKey(options ...ConfigOption) error {
 		return err
 	}
 
-	fmt.Fprintf(os.Stderr, "Generating new private key...")
+	Logger.Printf("Generating new private key...")
 	privateKey, err := NewPrivateKey(config.bitsize)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed: %v\n", err)
+		Logger.Printf("failed: %v\n", err)
 		return err
 	}
-	fmt.Fprintf(os.Stderr, "success\n")
+	Logger.Printf("success\n")
 
 	publicKey, err := privateKey.PublicKey()
 	if err != nil {
@@ -173,13 +173,7 @@ func AuthorizeKey(options ...ConfigOption) (err error) {
 	// read the key
 	if config.keyfile == "-" {
 		// read from stdin
-		fmt.Fprintf(os.Stderr, "Reading public key from stdin...")
 		err = pk.Decode(os.Stdin)
-		if err == nil {
-			fmt.Fprintf(os.Stderr, "done\n")
-		} else {
-			fmt.Fprintf(os.Stderr, "failed: %v", err)
-		}
 	} else {
 		var f *os.File
 		if f, err = os.Open(config.keyfile); err == nil {
@@ -192,7 +186,7 @@ func AuthorizeKey(options ...ConfigOption) (err error) {
 						err = pk.Decode(f)
 					}
 				} else {
-					err = fmt.Errorf("Could not parse public key %v", config.keyfile)
+					Logger.Printf("Failed to parse public key %s: %v", config.keyfile, err)
 				}
 			}
 		}
@@ -207,6 +201,8 @@ func AuthorizeKey(options ...ConfigOption) (err error) {
 				// TODO add forced command here
 				_, err = f.Write(ssh.MarshalAuthorizedKey(pk))
 			}
+		} else {
+			Logger.Printf("Failed to create %s: %v", filepath.Dir(config.authorizedKeys))
 		}
 	}
 	return err
@@ -228,7 +224,13 @@ func DeployKey(localDev, hostname, remoteDev string, options ...ConfigOption) er
 		return err
 	}
 
-	publicKey, err := ioutil.ReadFile(config.keyfile)
+	publicKeyfile := config.keyfile
+	if !strings.HasPrefix(publicKeyfile, ".pub") {
+		if _, err := os.Stat(publicKeyfile + ".pub"); err == nil {
+			publicKeyfile = publicKeyfile + ".pub"
+		}
+	}
+	publicKey, err := ioutil.ReadFile(publicKeyfile)
 	if err != nil {
 		return err
 	}
@@ -249,7 +251,7 @@ func DeployKey(localDev, hostname, remoteDev string, options ...ConfigOption) er
 	session.Stderr = os.Stderr
 	session.Stdout = os.Stdout
 
-	err = session.Run(fmt.Sprintf("%s key auth -i -", config.exec))
+	err = session.Run(fmt.Sprintf("%s key auth -f -", config.exec))
 	if err != nil {
 		if exerr, ok := err.(*ssh.ExitError); ok {
 			if exerr.ExitStatus() == 127 {

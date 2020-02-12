@@ -91,13 +91,13 @@ func Connect(hostname string, options ...ConfigOption) (*Connection, error) {
 		option(config)
 	}
 
-	if (config.identityAuth == nil && config.passwordAuth == nil) || config.clientConfig.User == "" || config.knownHosts == "" {
+	if config.identityAuth == nil || config.clientConfig.User == "" || config.knownHosts == "" {
 		u, err := user.Current()
 		if err != nil {
 			return nil, err
 		}
 
-		if config.identityAuth == nil && config.passwordAuth == nil {
+		if config.identityAuth == nil {
 			err := DefaultIdentityFile(u.HomeDir)(config)
 			if err != nil {
 				return nil, err
