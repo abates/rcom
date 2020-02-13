@@ -13,14 +13,16 @@ import (
 )
 
 var (
-	currentUser *user.User
+	app    *cli.Command
+	client *cli.Command
+	deploy *cli.Command
 
-	app = cli.New(filepath.Base(os.Args[0]))
+	currentUser *user.User
 
 	configDir = ""
 	hostname  = ""
 	localDev  = ""
-	remoteDev = ""
+	debug     = false
 
 	username  = ""
 	port      = 22
@@ -56,17 +58,26 @@ func init() {
 		log.Fatalf("Failed to determine current user: %v", err)
 	}
 
+	app = cli.New(
+		filepath.Base(os.Args[0]),
+		cli.UsageOption("[global options] <command>"),
+		cli.CallbackOption(func(string) error {
+			if debug {
+				rcom.Logger = log.New(os.Stderr, "", log.LstdFlags)
+			}
+			return nil
+		}),
+	)
 	app.SetOutput(os.Stderr)
+	app.Flags.BoolVar(&debug, "debug", false, "turn on debug logging")
 
-	client := app.SubCommand("client",
-		cli.UsageOption("[options] <local device> <remote host> <remote device>"),
+	client = app.SubCommand("client",
+		cli.UsageOption("[options] <remote host> <ldev:rdev> [<ldev:rdev> ...]"),
 		cli.DescOption("Start client mode"),
 		cli.CallbackOption(clientCmd),
 	)
 	setConnectionFlags(&client.Flags)
-	client.Arguments.String(&localDev, "device path")
 	client.Arguments.String(&hostname, "remote hostname")
-	client.Arguments.String(&remoteDev, "remote device path")
 
 	server := app.SubCommand("server",
 		cli.UsageOption("<local device>"),
@@ -85,29 +96,26 @@ func init() {
 	auth := key.SubCommand("auth", cli.DescOption("Add a public key to the authorized_keys file"), cli.CallbackOption(authCmd))
 	setKeyFlags(&auth.Flags)
 
-	deploy := key.SubCommand("deploy",
-		cli.UsageOption("[options] <local device> <remote host> <remote device>"),
+	deploy = key.SubCommand("deploy",
+		cli.UsageOption("[options] <remote host> <rdev> [<rdev> ...]"),
 		cli.DescOption("Deploy a public key to a remote host"),
 		cli.CallbackOption(deployCmd),
 	)
 	setDeployFlags(&deploy.Flags)
-	deploy.Arguments.String(&localDev, "device path")
 	deploy.Arguments.String(&hostname, "remote hostname")
-	deploy.Arguments.String(&remoteDev, "remote device path")
-
 }
 
 func main() {
 	app.Parse(os.Args[1:])
 	err := app.Run()
 	if err != nil {
-		fmt.Printf("%v\n", err)
+		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
 	}
 }
 
 func clientCmd(string) error {
-	return rcom.Client(localDev, hostname, remoteDev, rcom.Login(username), rcom.Port(port), rcom.IdentityFile(identity), rcom.Accept(acceptNew), rcom.Exec(exec))
+	return rcom.Client(hostname, client.Arguments.Args(), rcom.Login(username), rcom.Port(port), rcom.IdentityFile(identity), rcom.Accept(acceptNew), rcom.Exec(exec))
 }
 
 func serverCmd(string) error {
@@ -123,5 +131,5 @@ func authCmd(string) error {
 }
 
 func deployCmd(string) error {
-	return rcom.DeployKey(localDev, hostname, remoteDev, rcom.KeyFile(keyfile), rcom.BitSize(bitsize), rcom.Login(username), rcom.Port(port), rcom.IdentityFile(identity), rcom.Accept(acceptNew), rcom.Exec(exec))
+	return rcom.DeployKey(hostname, deploy.Arguments.Args(), rcom.KeyFile(keyfile), rcom.BitSize(bitsize), rcom.Login(username), rcom.Port(port), rcom.IdentityFile(identity), rcom.Accept(acceptNew), rcom.Exec(exec))
 }

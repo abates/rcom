@@ -6,26 +6,40 @@ import (
 	"sync"
 )
 
+type reader struct {
+	upstream io.Reader
+}
+
+func (r reader) Read(p []byte) (n int, err error) {
+	n, err = r.upstream.Read(p)
+	if err == nil {
+		Logger.Printf("Read %d bytes: %x", n, p[0:n])
+	}
+	return n, err
+}
+
 func Server(linkname string) error {
-	p := &port{filename: linkname}
-	err := p.setup()
+	p, err := newPort(linkname)
 	if err != nil {
 		return err
 	}
 	defer p.Close()
 
 	var wg sync.WaitGroup
+
+	wg.Add(1)
 	go func() {
-		wg.Add(1)
-		io.Copy(os.Stdin, p)
+		_, err := io.Copy(p, os.Stdin)
+		if err != nil {
+			Logger.Printf("Failed to copy from Stdin: %v", err)
+		}
 		wg.Done()
 	}()
 
-	go func() {
-		wg.Add(1)
-		io.Copy(os.Stdout, p)
-		wg.Done()
-	}()
+	_, err = io.Copy(os.Stdout, p)
+	if err != nil {
+		Logger.Printf("Failed to copy to Stdout: %v", err)
+	}
 
 	wg.Wait()
 	return nil

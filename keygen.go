@@ -208,7 +208,7 @@ func AuthorizeKey(options ...ConfigOption) (err error) {
 	return err
 }
 
-func DeployKey(localDev, hostname, remoteDev string, options ...ConfigOption) error {
+func DeployKey(hostname string, devices []string, options ...ConfigOption) error {
 	config, err := keyConfig(options...)
 	if err != nil {
 		return err
@@ -230,6 +230,7 @@ func DeployKey(localDev, hostname, remoteDev string, options ...ConfigOption) er
 			publicKeyfile = publicKeyfile + ".pub"
 		}
 	}
+
 	publicKey, err := ioutil.ReadFile(publicKeyfile)
 	if err != nil {
 		return err
@@ -252,13 +253,5 @@ func DeployKey(localDev, hostname, remoteDev string, options ...ConfigOption) er
 	session.Stdout = os.Stdout
 
 	err = session.Run(fmt.Sprintf("%s key auth -f -", config.exec))
-	if err != nil {
-		if exerr, ok := err.(*ssh.ExitError); ok {
-			if exerr.ExitStatus() == 127 {
-				err = fmt.Errorf("%s not found on remote host", config.exec)
-			}
-		}
-	}
-
 	return err
 }
