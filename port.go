@@ -10,7 +10,6 @@ import (
 type port struct {
 	pty      *os.File
 	tty      *os.File
-	oldState *terminal.State
 	linkName string
 }
 
@@ -28,7 +27,7 @@ func newPort(device string) (p *port, err error) {
 		if os.IsNotExist(err) {
 			err = nil
 			p.pty, p.tty, err = pty.Open()
-			p.oldState, err = terminal.MakeRaw(int(p.pty.Fd()))
+			_, err = terminal.MakeRaw(int(p.pty.Fd()))
 			if err != nil {
 				Logger.Printf("Failed to activate RAW mode on pty: %v", err)
 				return nil, err
@@ -50,14 +49,21 @@ func newPort(device string) (p *port, err error) {
 	return p, err
 }
 
-func (p *port) Close() error {
+func (p *port) ClosePTY() error {
+	if p.linkName != "" {
+		Logger.Printf("Removing symlink %s", p.linkName)
+		os.Remove(p.linkName)
+	}
+	return p.pty.Close()
+}
+
+func (p *port) CloseTTY() error {
 	if p.linkName != "" {
 		Logger.Printf("Removing symlink %s", p.linkName)
 		os.Remove(p.linkName)
 	}
 	if p.tty != nil {
-		p.tty.Close()
-		terminal.Restore(int(p.pty.Fd()), p.oldState)
+		return p.tty.Close()
 	}
-	return p.pty.Close()
+	return nil
 }

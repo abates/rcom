@@ -3,6 +3,7 @@ package rcom
 import (
 	"io"
 	"os"
+	"os/signal"
 	"sync"
 )
 
@@ -23,7 +24,6 @@ func Server(linkname string) error {
 	if err != nil {
 		return err
 	}
-	defer p.Close()
 
 	var wg sync.WaitGroup
 
@@ -33,14 +33,31 @@ func Server(linkname string) error {
 		if err != nil {
 			Logger.Printf("Failed to copy from Stdin: %v", err)
 		}
+		println("done copying from stdin")
 		wg.Done()
 	}()
 
-	_, err = io.Copy(os.Stdout, p)
-	if err != nil {
-		Logger.Printf("Failed to copy to Stdout: %v", err)
-	}
+	wg.Add(1)
+	go func() {
+		_, err = io.Copy(os.Stdout, p)
+		if err != nil {
+			Logger.Printf("Failed to copy to Stdout: %v", err)
+		}
+		println("done copying from pty")
+		wg.Done()
+	}()
 
+	ch := make(chan os.Signal, 2)
+	signal.Notify(ch, os.Interrupt)
+	closed := false
+	go func() {
+		<-ch
+		p.CloseTTY()
+		closed = true
+	}()
 	wg.Wait()
+	if !closed {
+		p.CloseTTY()
+	}
 	return nil
 }
