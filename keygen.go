@@ -10,7 +10,6 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"os/user"
 	"path/filepath"
 	"strings"
 
@@ -90,34 +89,6 @@ func (pk *PublicKey) UnmarshalBinary(buf []byte) error {
 
 func (pk *PublicKey) MarshalBinary() ([]byte, error) {
 	return ssh.MarshalAuthorizedKey(pk.PublicKey), nil
-}
-
-func keyConfig(options ...ConfigOption) (*Config, error) {
-	config := &Config{
-		bitsize: 4096,
-	}
-
-	for _, option := range options {
-		err := option(config)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	if config.keyfile == "" || config.authorizedKeys == "" {
-		u, err := user.Current()
-		if err != nil {
-			return nil, err
-		}
-		if config.keyfile == "" {
-			config.keyfile = filepath.Join(u.HomeDir, ".ssh", "id_rsa_rcom")
-		}
-
-		if config.authorizedKeys == "" {
-			config.authorizedKeys = filepath.Join(u.HomeDir, ".ssh", "authorized_keys")
-		}
-	}
-	return config, nil
 }
 
 func GenerateKey(bitsize int, keyfile string) error {

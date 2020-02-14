@@ -15,12 +15,9 @@ import (
 var Logger = log.New(ioutil.Discard, "", 0)
 
 type Config struct {
-	acceptNew      bool // acceptNew entries to known_hosts
-	port           int
-	bitsize        int
-	keyfile        string
-	knownHosts     string
-	authorizedKeys string
+	acceptNew  bool // acceptNew entries to known_hosts
+	port       int
+	knownHosts string
 
 	identityAuth ssh.AuthMethod
 	passwordAuth ssh.AuthMethod
@@ -53,30 +50,9 @@ func Accept(accept bool) ConfigOption {
 	}
 }
 
-func BitSize(size int) ConfigOption {
-	return func(config *Config) error {
-		config.bitsize = size
-		return nil
-	}
-}
-
-func KeyFile(file string) ConfigOption {
-	return func(config *Config) error {
-		config.keyfile = file
-		return nil
-	}
-}
-
 func KnownHosts(file string) ConfigOption {
 	return func(config *Config) error {
 		config.knownHosts = file
-		return nil
-	}
-}
-
-func AuthorizedKeys(file string) ConfigOption {
-	return func(config *Config) error {
-		config.authorizedKeys = file
 		return nil
 	}
 }
