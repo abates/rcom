@@ -162,7 +162,7 @@ func AuthorizeKey(keyfile, authorizedKeys string) (err error) {
 				_, err = f.Write(ssh.MarshalAuthorizedKey(pk))
 			}
 		} else {
-			Logger.Printf("Failed to create %s: %v", filepath.Dir(authorizedKeys))
+			Logger.Printf("Failed to create %s: %v", filepath.Dir(authorizedKeys), err)
 		}
 	}
 	return err
