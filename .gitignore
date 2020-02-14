@@ -12,3 +12,4 @@
 *.out
 
 cmd/rcom/rcom
+dist/
