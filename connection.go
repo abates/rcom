@@ -3,6 +3,7 @@ package rcom
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net"
 	"os"
@@ -16,7 +17,63 @@ import (
 
 type Connection struct {
 	*ssh.Client
-	config *Config
+	config   *Config
+	sessions []*ssh.Session
+}
+
+func (conn *Connection) Run(exec string, stdin io.Reader, stdout io.Writer, stderr io.Writer) error {
+	session, err := conn.Start(exec, stdin, stdout, stderr)
+	if err == nil {
+		err = session.Wait()
+	}
+	return err
+}
+
+func (conn *Connection) Start(exec string, stdin io.Reader, stdout io.Writer, stderr io.Writer) (*ssh.Session, error) {
+	session, err := conn.NewSession()
+	if err != nil {
+		Logger.Printf("Failed to create ssh session: %v", err)
+		return nil, err
+	}
+
+	session.Stdin = stdin
+	session.Stdout = stdout
+	session.Stderr = stderr
+	err = session.Start(exec)
+	if err != nil {
+		Logger.Printf("Failed to start remote command: %q: %v", exec, err)
+	}
+	return session, err
+}
+
+func (conn *Connection) AttachPTY(localDev string, exec string) error {
+	p, err := newPort(localDev)
+	if err != nil {
+		Logger.Printf("Failed to attach to port %s: %v", localDev, err)
+		p.ClosePTY()
+		return err
+	}
+
+	session, err := conn.Start(exec, p, p, os.Stderr)
+	if err == nil {
+		conn.sessions = append(conn.sessions, session)
+	} else {
+		p.ClosePTY()
+	}
+
+	return err
+}
+
+func (conn *Connection) Close() error {
+	for _, session := range conn.sessions {
+		if p, ok := session.Stdin.(*port); ok {
+			p.ClosePTY()
+		}
+		session.Signal(ssh.SIGINT)
+		session.Close()
+	}
+	conn.sessions = nil
+	return nil
 }
 
 func (conn *Connection) hostKeyCallback(hostname string, remote net.Addr, key ssh.PublicKey) error {

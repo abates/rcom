@@ -2,7 +2,6 @@ package rcom
 
 import (
 	"bufio"
-	"bytes"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
@@ -121,14 +120,9 @@ func keyConfig(options ...ConfigOption) (*Config, error) {
 	return config, nil
 }
 
-func GenerateKey(options ...ConfigOption) error {
-	config, err := keyConfig(options...)
-	if err != nil {
-		return err
-	}
-
+func GenerateKey(bitsize int, keyfile string) error {
 	Logger.Printf("Generating new private key...")
-	privateKey, err := NewPrivateKey(config.bitsize)
+	privateKey, err := NewPrivateKey(bitsize)
 	if err != nil {
 		Logger.Printf("failed: %v\n", err)
 		return err
@@ -140,53 +134,48 @@ func GenerateKey(options ...ConfigOption) error {
 		return err
 	}
 
-	if _, err := os.Stat(filepath.Dir(config.keyfile)); os.IsNotExist(err) {
-		err = os.Mkdir(filepath.Dir(config.keyfile), 0700)
+	if _, err := os.Stat(filepath.Dir(keyfile)); os.IsNotExist(err) {
+		err = os.Mkdir(filepath.Dir(keyfile), 0700)
 		if err != nil {
-			return fmt.Errorf("Failed to create %s: %v", filepath.Dir(config.keyfile), err)
+			return fmt.Errorf("Failed to create %s: %v", filepath.Dir(keyfile), err)
 		}
 	} else if err != nil {
 		return err
 	}
 
 	b, _ := privateKey.MarshalPEM()
-	err = ioutil.WriteFile(config.keyfile, b, 0600)
+	err = ioutil.WriteFile(keyfile, b, 0600)
 	if err != nil {
-		return fmt.Errorf("Failed to write private key %s: %v", config.keyfile, err)
+		return fmt.Errorf("Failed to write private key %s: %v", keyfile, err)
 	}
 
 	b, _ = publicKey.MarshalBinary()
-	err = ioutil.WriteFile(config.keyfile+".pub", b, 0600)
+	err = ioutil.WriteFile(keyfile+".pub", b, 0600)
 	if err != nil {
-		return fmt.Errorf("Failed to write public key %s.pub: %v", config.keyfile, err)
+		return fmt.Errorf("Failed to write public key %s.pub: %v", keyfile, err)
 	}
 	return nil
 }
 
-func AuthorizeKey(options ...ConfigOption) (err error) {
-	config, err := keyConfig(options...)
-	if err != nil {
-		return err
-	}
-
+func AuthorizeKey(keyfile, authorizedKeys string) (err error) {
 	var pk PublicKey
 	// read the key
-	if config.keyfile == "-" {
+	if keyfile == "-" {
 		// read from stdin
 		err = pk.Decode(os.Stdin)
 	} else {
 		var f *os.File
-		if f, err = os.Open(config.keyfile); err == nil {
+		if f, err = os.Open(keyfile); err == nil {
 			err = pk.Decode(f)
 
-			if err != nil && !strings.HasSuffix(config.keyfile, ".pub") {
-				if _, err = os.Stat(config.keyfile + ".pub"); err == nil {
-					f, err = os.Open(config.keyfile + ".pub")
+			if err != nil && !strings.HasSuffix(keyfile, ".pub") {
+				if _, err = os.Stat(keyfile + ".pub"); err == nil {
+					f, err = os.Open(keyfile + ".pub")
 					if err == nil {
 						err = pk.Decode(f)
 					}
 				} else {
-					Logger.Printf("Failed to parse public key %s: %v", config.keyfile, err)
+					Logger.Printf("Failed to parse public key %s: %v", keyfile, err)
 				}
 			}
 		}
@@ -194,64 +183,16 @@ func AuthorizeKey(options ...ConfigOption) (err error) {
 
 	if err == nil {
 		var f *os.File
-		if err = os.MkdirAll(filepath.Dir(config.authorizedKeys), 0700); err == nil {
-			f, err = os.OpenFile(config.authorizedKeys, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+		if err = os.MkdirAll(filepath.Dir(authorizedKeys), 0700); err == nil {
+			f, err = os.OpenFile(authorizedKeys, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 			if err == nil {
 				defer f.Close()
 				// TODO add forced command here
 				_, err = f.Write(ssh.MarshalAuthorizedKey(pk))
 			}
 		} else {
-			Logger.Printf("Failed to create %s: %v", filepath.Dir(config.authorizedKeys))
+			Logger.Printf("Failed to create %s: %v", filepath.Dir(authorizedKeys))
 		}
 	}
-	return err
-}
-
-func DeployKey(hostname string, devices []string, options ...ConfigOption) error {
-	config, err := keyConfig(options...)
-	if err != nil {
-		return err
-	}
-
-	// create key if it doesn't already exist
-	_, err = os.Stat(config.keyfile)
-	if os.IsNotExist(err) {
-		err = GenerateKey(options...)
-	}
-
-	if err != nil {
-		return err
-	}
-
-	publicKeyfile := config.keyfile
-	if !strings.HasPrefix(publicKeyfile, ".pub") {
-		if _, err := os.Stat(publicKeyfile + ".pub"); err == nil {
-			publicKeyfile = publicKeyfile + ".pub"
-		}
-	}
-
-	publicKey, err := ioutil.ReadFile(publicKeyfile)
-	if err != nil {
-		return err
-	}
-	publicKey = append(publicKey, []byte("\n")...)
-	conn, err := Connect(hostname, append(options, PasswordAuth())...)
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-
-	session, err := conn.NewSession()
-	if err != nil {
-		return err
-	}
-	defer session.Close()
-
-	session.Stdin = bytes.NewReader(publicKey)
-	session.Stderr = os.Stderr
-	session.Stdout = os.Stdout
-
-	err = session.Run(fmt.Sprintf("%s key auth -f -", config.exec))
 	return err
 }

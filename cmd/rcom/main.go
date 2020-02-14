@@ -1,21 +1,28 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
+	"os/signal"
 	"os/user"
 	"path/filepath"
+	"strings"
+	"syscall"
 
 	"github.com/abates/cli"
 	"github.com/abates/rcom"
 )
 
+const DefaultExec = "rcom"
+
 var (
-	app    *cli.Command
-	client *cli.Command
-	deploy *cli.Command
+	app       *cli.Command
+	clientCmd *cli.Command
+	deployCmd *cli.Command
 
 	currentUser *user.User
 
@@ -24,26 +31,27 @@ var (
 	localDev  = ""
 	debug     = false
 
-	username  = ""
-	port      = 22
-	identity  = ""
-	acceptNew = false
-	exec      = "rcom"
-	bitsize   = 4096
-	keyfile   = ""
+	username       = ""
+	port           = 22
+	identity       = ""
+	acceptNew      = false
+	exec           = DefaultExec
+	bitsize        = 4096
+	keyfile        = ""
+	authorizedKeys = ""
 )
 
 func setConnectionFlags(fs *flag.FlagSet) {
 	fs.StringVar(&username, "l", currentUser.Username, "login user")
 	fs.IntVar(&port, "p", 22, "port to connect on the remote host")
-	fs.StringVar(&identity, "i", "", "specify identity (private key) file")
+	fs.StringVar(&identity, "i", filepath.Join(currentUser.HomeDir, ".ssh", "id_rsa_"+DefaultExec), "specify identity (private key) file")
 	fs.BoolVar(&acceptNew, "a", false, "accept new public keys")
-	fs.StringVar(&exec, "e", "rcom", "executable path/name on remote system")
+	fs.StringVar(&exec, "e", exec, "executable path/name on remote system")
 }
 
 func setKeyFlags(fs *flag.FlagSet) {
 	fs.IntVar(&bitsize, "b", 4096, "bitsize")
-	fs.StringVar(&keyfile, "f", filepath.Join(currentUser.HomeDir, ".ssh", "id_rsa_rcom"), "key file")
+	fs.StringVar(&keyfile, "f", filepath.Join(currentUser.HomeDir, ".ssh", "id_rsa_"+DefaultExec), "key file")
 }
 
 func setDeployFlags(fs *flag.FlagSet) {
@@ -57,6 +65,7 @@ func init() {
 	if err != nil {
 		log.Fatalf("Failed to determine current user: %v", err)
 	}
+	authorizedKeys = filepath.Join(currentUser.HomeDir, ".ssh", "authorized_keys")
 
 	app = cli.New(
 		filepath.Base(os.Args[0]),
@@ -71,13 +80,13 @@ func init() {
 	app.SetOutput(os.Stderr)
 	app.Flags.BoolVar(&debug, "debug", false, "turn on debug logging")
 
-	client = app.SubCommand("client",
+	clientCmd = app.SubCommand("client",
 		cli.UsageOption("[options] <remote host> <ldev:rdev> [<ldev:rdev> ...]"),
 		cli.DescOption("Start client mode"),
-		cli.CallbackOption(clientCmd),
+		cli.CallbackOption(clientCb),
 	)
-	setConnectionFlags(&client.Flags)
-	client.Arguments.String(&hostname, "remote hostname")
+	setConnectionFlags(&clientCmd.Flags)
+	clientCmd.Arguments.String(&hostname, "remote hostname")
 
 	server := app.SubCommand("server",
 		cli.UsageOption("<local device>"),
@@ -96,13 +105,13 @@ func init() {
 	auth := key.SubCommand("auth", cli.DescOption("Add a public key to the authorized_keys file"), cli.CallbackOption(authCmd))
 	setKeyFlags(&auth.Flags)
 
-	deploy = key.SubCommand("deploy",
+	deployCmd = key.SubCommand("deploy",
 		cli.UsageOption("[options] <remote host> <rdev> [<rdev> ...]"),
 		cli.DescOption("Deploy a public key to a remote host"),
-		cli.CallbackOption(deployCmd),
+		cli.CallbackOption(deployCb),
 	)
-	setDeployFlags(&deploy.Flags)
-	deploy.Arguments.String(&hostname, "remote hostname")
+	setDeployFlags(&deployCmd.Flags)
+	deployCmd.Arguments.String(&hostname, "remote hostname")
 }
 
 func main() {
@@ -115,8 +124,41 @@ func main() {
 	os.Exit(0)
 }
 
-func clientCmd(string) error {
-	return rcom.Client(hostname, client.Arguments.Args(), rcom.Login(username), rcom.Port(port), rcom.IdentityFile(identity), rcom.Accept(acceptNew), rcom.Exec(exec))
+func clientCb(string) error {
+	println("Identity file:", identity)
+	client, err := rcom.Connect(hostname, rcom.Login(username), rcom.Port(port), rcom.IdentityFile(identity), rcom.Accept(acceptNew))
+	if err != nil {
+		return err
+	}
+
+	ch := make(chan os.Signal, 2)
+	signal.Notify(ch, os.Interrupt, syscall.SIGINT)
+	go func() {
+		<-ch
+		client.Close()
+	}()
+
+	for _, device := range clientCmd.Arguments.Args() {
+		localdev, remotedev := device, device
+		if strings.Contains(device, ":") {
+			s := strings.Split(device, ":")
+			localdev, remotedev = s[0], s[1]
+		}
+
+		if strings.HasSuffix(exec, DefaultExec) {
+			exec = fmt.Sprintf("%s server %s", exec, remotedev)
+		}
+		err = client.AttachPTY(localdev, exec)
+		if err != nil {
+			break
+		}
+	}
+
+	if err == nil {
+		err = client.Wait()
+		client.Close()
+	}
+	return err
 }
 
 func serverCmd(string) error {
@@ -124,13 +166,45 @@ func serverCmd(string) error {
 }
 
 func genCmd(string) error {
-	return rcom.GenerateKey(rcom.KeyFile(keyfile), rcom.BitSize(bitsize))
+	return rcom.GenerateKey(bitsize, keyfile)
 }
 
 func authCmd(string) error {
-	return rcom.AuthorizeKey(rcom.KeyFile(keyfile), rcom.BitSize(bitsize))
+	return rcom.AuthorizeKey(keyfile, authorizedKeys)
 }
 
-func deployCmd(string) error {
-	return rcom.DeployKey(hostname, deploy.Arguments.Args(), rcom.KeyFile(keyfile), rcom.BitSize(bitsize), rcom.Login(username), rcom.Port(port), rcom.IdentityFile(identity), rcom.Accept(acceptNew), rcom.Exec(exec))
+func deployCb(string) error {
+	// create key if it doesn't already exist
+	_, err := os.Stat(keyfile)
+	if os.IsNotExist(err) {
+		err = rcom.GenerateKey(bitsize, keyfile)
+	}
+
+	if err != nil {
+		return err
+	}
+
+	publicKeyfile := keyfile
+	if !strings.HasPrefix(publicKeyfile, ".pub") {
+		if _, err := os.Stat(publicKeyfile + ".pub"); err == nil {
+			publicKeyfile = publicKeyfile + ".pub"
+		}
+	}
+
+	publicKey, err := ioutil.ReadFile(publicKeyfile)
+	if err != nil {
+		return err
+	}
+	publicKey = append(publicKey, []byte("\n")...)
+
+	if strings.HasSuffix(exec, DefaultExec) {
+		exec = fmt.Sprintf("%s key auth -f -", exec)
+	}
+	conn, err := rcom.Connect(hostname, rcom.PasswordAuth(), rcom.Login(username), rcom.Port(port), rcom.Accept(acceptNew))
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	return conn.Run(exec, bytes.NewReader(publicKey), os.Stdout, os.Stderr)
 }

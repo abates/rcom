@@ -17,7 +17,6 @@ var Logger = log.New(ioutil.Discard, "", 0)
 type Config struct {
 	acceptNew      bool // acceptNew entries to known_hosts
 	port           int
-	exec           string
 	bitsize        int
 	keyfile        string
 	knownHosts     string
@@ -50,15 +49,6 @@ func Port(port int) ConfigOption {
 func Accept(accept bool) ConfigOption {
 	return func(config *Config) error {
 		config.acceptNew = accept
-		return nil
-	}
-}
-
-func Exec(exec string) ConfigOption {
-	return func(config *Config) (err error) {
-		// we don't check if exec exists here. Although it might not exist
-		// locally, it might exist remotely
-		config.exec = exec
 		return nil
 	}
 }

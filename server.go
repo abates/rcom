@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/signal"
 	"sync"
+	"syscall"
 )
 
 type reader struct {
@@ -33,7 +34,6 @@ func Server(linkname string) error {
 		if err != nil {
 			Logger.Printf("Failed to copy from Stdin: %v", err)
 		}
-		println("done copying from stdin")
 		wg.Done()
 	}()
 
@@ -43,12 +43,11 @@ func Server(linkname string) error {
 		if err != nil {
 			Logger.Printf("Failed to copy to Stdout: %v", err)
 		}
-		println("done copying from pty")
 		wg.Done()
 	}()
 
 	ch := make(chan os.Signal, 2)
-	signal.Notify(ch, os.Interrupt)
+	signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
 	closed := false
 	go func() {
 		<-ch
