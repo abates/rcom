@@ -2,6 +2,7 @@ package rcom
 
 import (
 	"os"
+	"syscall"
 
 	"github.com/creack/pty"
 	"golang.org/x/crypto/ssh/terminal"
@@ -44,7 +45,7 @@ func newPort(device string) (p *port, err error) {
 			}
 		}
 	} else {
-		p.pty, err = os.OpenFile(device, os.O_RDWR, 0)
+		p.pty, err = os.OpenFile(device, os.O_RDWR|syscall.O_NOCTTY|syscall.O_NONBLOCK, 0)
 	}
 	return p, err
 }
