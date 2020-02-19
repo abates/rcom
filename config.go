@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"os"
 	"path/filepath"
 
@@ -11,14 +12,12 @@ import (
 	"golang.org/x/crypto/ssh/terminal"
 )
 
+var Logger = log.New(ioutil.Discard, "", 0)
+
 type Config struct {
-	acceptNew      bool // acceptNew entries to known_hosts
-	port           int
-	exec           string
-	bitsize        int
-	keyfile        string
-	knownHosts     string
-	authorizedKeys string
+	acceptNew  bool // acceptNew entries to known_hosts
+	port       int
+	knownHosts string
 
 	identityAuth ssh.AuthMethod
 	passwordAuth ssh.AuthMethod
@@ -51,39 +50,9 @@ func Accept(accept bool) ConfigOption {
 	}
 }
 
-func Exec(exec string) ConfigOption {
-	return func(config *Config) (err error) {
-		// we don't check if exec exists here. Although it might not exist
-		// locally, it might exist remotely
-		config.exec = exec
-		return nil
-	}
-}
-
-func BitSize(size int) ConfigOption {
-	return func(config *Config) error {
-		config.bitsize = size
-		return nil
-	}
-}
-
-func KeyFile(file string) ConfigOption {
-	return func(config *Config) error {
-		config.keyfile = file
-		return nil
-	}
-}
-
 func KnownHosts(file string) ConfigOption {
 	return func(config *Config) error {
 		config.knownHosts = file
-		return nil
-	}
-}
-
-func AuthorizedKeys(file string) ConfigOption {
-	return func(config *Config) error {
-		config.authorizedKeys = file
 		return nil
 	}
 }

@@ -5,10 +5,14 @@ services:
     image: abates/rcom
     stdin_open: true
     tty: true
+    volumes:
+      - "../:/home/rcom/devel/rcom"
     depends_on:
       - "server"
   server:
     tty: true
+    volumes:
+      - "../:/home/rcom/devel/rcom"
     environment:
       START_SSHD: "true"
     image: abates/rcom
