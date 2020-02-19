@@ -23,12 +23,14 @@ func (r reader) Read(p []byte) (n int, err error) {
 }
 
 func Server(linkname string) error {
+	Logger.Printf("Connecting server to %s", linkname)
 	p, err := newPort(linkname)
 	if err != nil {
 		return err
 	}
 
 	var wg sync.WaitGroup
+	Logger.Printf("Setting STDIN to RAW")
 	_, err = terminal.MakeRaw(int(os.Stdin.Fd()))
 	if err != nil {
 		return err
@@ -36,7 +38,6 @@ func Server(linkname string) error {
 
 	wg.Add(1)
 	go func() {
-
 		_, err := io.Copy(p, os.Stdin)
 		if err != nil {
 			Logger.Printf("Failed to copy from Stdin: %v", err)
