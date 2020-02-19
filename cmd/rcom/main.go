@@ -154,7 +154,7 @@ func clientCb(string) error {
 			}
 			exec = fmt.Sprintf("%s server -f %s", exec, remotedev)
 		}
-		err = client.AttachPTY(localdev, false, exec)
+		err = client.AttachPTY(localdev, forceLink, exec)
 		if err != nil {
 			break
 		}
@@ -168,7 +168,7 @@ func clientCb(string) error {
 }
 
 func serverCmd(string) error {
-	return rcom.Server(localDev, false)
+	return rcom.Server(localDev, forceLink)
 }
 
 func genCmd(string) error {
