@@ -39,6 +39,7 @@ var (
 	bitsize        = 4096
 	keyfile        = ""
 	authorizedKeys = ""
+	forceLink      = false
 )
 
 func setConnectionFlags(fs *flag.FlagSet) {
@@ -94,6 +95,7 @@ func init() {
 		cli.CallbackOption(serverCmd),
 	)
 	server.Arguments.String(&localDev, "device path")
+	server.Flags.BoolVar(&forceLink, "f", false, "Remove symlink if it already exists")
 
 	key := app.SubCommand("key",
 		cli.UsageOption("<command> [options]"),
@@ -125,7 +127,7 @@ func main() {
 }
 
 func clientCb(string) error {
-	println("Identity file:", identity)
+	rcom.Logger.Printf("Connecting to %s", hostname)
 	client, err := rcom.Connect(hostname, rcom.Login(username), rcom.Port(port), rcom.IdentityFile(identity), rcom.Accept(acceptNew))
 	if err != nil {
 		return err
@@ -136,6 +138,7 @@ func clientCb(string) error {
 	go func() {
 		<-ch
 		client.Close()
+		os.Exit(0)
 	}()
 
 	for _, device := range clientCmd.Arguments.Args() {
@@ -146,7 +149,10 @@ func clientCb(string) error {
 		}
 
 		if strings.HasSuffix(exec, DefaultExec) {
-			exec = fmt.Sprintf("%s server %s", exec, remotedev)
+			if debug {
+				exec = fmt.Sprintf("%s -debug", exec)
+			}
+			exec = fmt.Sprintf("%s server -f %s", exec, remotedev)
 		}
 		err = client.AttachPTY(localdev, exec)
 		if err != nil {
@@ -155,7 +161,7 @@ func clientCb(string) error {
 	}
 
 	if err == nil {
-		err = client.Wait()
+		client.Wait()
 		client.Close()
 	}
 	return err
@@ -206,5 +212,9 @@ func deployCb(string) error {
 	}
 	defer conn.Close()
 
-	return conn.Run(exec, bytes.NewReader(publicKey), os.Stdout, os.Stderr)
+	_, err = conn.Start(exec, bytes.NewReader(publicKey), os.Stdout, os.Stderr)
+	if err == nil {
+		conn.Wait()
+	}
+	return err
 }
