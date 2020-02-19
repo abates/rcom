@@ -6,8 +6,6 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
-
-	"golang.org/x/crypto/ssh/terminal"
 )
 
 type reader struct {
@@ -30,11 +28,6 @@ func Server(linkname string) error {
 	}
 
 	var wg sync.WaitGroup
-	Logger.Printf("Setting STDIN to RAW")
-	_, err = terminal.MakeRaw(int(os.Stdin.Fd()))
-	if err != nil {
-		return err
-	}
 
 	wg.Add(1)
 	go func() {
@@ -42,15 +35,14 @@ func Server(linkname string) error {
 		if err != nil {
 			Logger.Printf("Failed to copy from Stdin: %v", err)
 		}
+		Logger.Printf("Stdin done")
 		wg.Done()
 	}()
 
 	wg.Add(1)
 	go func() {
 		_, err = io.Copy(os.Stdout, p)
-		if err != nil {
-			Logger.Printf("Failed to copy to Stdout: %v", err)
-		}
+		Logger.Printf("Stdout done")
 		wg.Done()
 	}()
 

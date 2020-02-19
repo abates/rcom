@@ -26,7 +26,7 @@ func newPort(device string) (p *port, err error) {
 	Logger.Printf("Opening port %s", device)
 	p = &port{}
 
-	if _, err = os.Lstat(device); err != nil {
+	if _, err = os.Stat(device); err != nil {
 		if os.IsNotExist(err) {
 			err = nil
 			p.pty, p.tty, err = pty.Open()
