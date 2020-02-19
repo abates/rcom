@@ -1,6 +1,7 @@
 package rcom
 
 import (
+	"fmt"
 	"os"
 	"syscall"
 
@@ -22,8 +23,22 @@ func (p *port) Write(buf []byte) (n int, err error) {
 	return p.pty.Write(buf)
 }
 
-func newPort(device string) (p *port, err error) {
+func newPort(device string, forceLink bool) (p *port, err error) {
 	p = &port{}
+
+	var fi os.FileInfo
+	if fi, err = os.Stat(device); err == nil {
+		if mode := fi.Mode(); mode&os.ModeSymlink == os.ModeSymlink {
+			if forceLink {
+				err = os.Remove(device)
+				if err != nil {
+					return nil, err
+				}
+			} else {
+				return nil, fmt.Errorf("Symlink %s already exists")
+			}
+		}
+	}
 	if _, err = os.Stat(device); err != nil {
 		if os.IsNotExist(err) {
 			err = nil
