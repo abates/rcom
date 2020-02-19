@@ -10,6 +10,8 @@ import (
 	"os/user"
 	"path/filepath"
 	"strings"
+	"sync"
+	"time"
 
 	"golang.org/x/crypto/ssh"
 	kh "golang.org/x/crypto/ssh/knownhosts"
@@ -19,15 +21,17 @@ type Connection struct {
 	*ssh.Client
 	config   *Config
 	sessions []*ssh.Session
+	wg       sync.WaitGroup
 }
 
+/*
 func (conn *Connection) Run(exec string, stdin io.Reader, stdout io.Writer, stderr io.Writer) error {
 	session, err := conn.Start(exec, stdin, stdout, stderr)
 	if err == nil {
 		err = session.Wait()
 	}
 	return err
-}
+}*/
 
 func (conn *Connection) Start(exec string, stdin io.Reader, stdout io.Writer, stderr io.Writer) (*ssh.Session, error) {
 	session, err := conn.NewSession()
@@ -40,13 +44,20 @@ func (conn *Connection) Start(exec string, stdin io.Reader, stdout io.Writer, st
 	session.Stdout = stdout
 	session.Stderr = stderr
 	err = session.Start(exec)
-	if err != nil {
+	if err == nil {
+		conn.wg.Add(1)
+		go func() {
+			session.Wait()
+			conn.wg.Done()
+		}()
+	} else {
 		Logger.Printf("Failed to start remote command: %q: %v", exec, err)
 	}
 	return session, err
 }
 
 func (conn *Connection) AttachPTY(localDev string, exec string) error {
+	Logger.Printf("Attaching to local port %s", localDev)
 	p, err := newPort(localDev)
 	if err != nil {
 		Logger.Printf("Failed to attach to port %s: %v", localDev, err)
@@ -54,6 +65,7 @@ func (conn *Connection) AttachPTY(localDev string, exec string) error {
 		return err
 	}
 
+	Logger.Printf("Executing %q on remote host", exec)
 	session, err := conn.Start(exec, p, p, os.Stderr)
 	if err == nil {
 		conn.sessions = append(conn.sessions, session)
@@ -64,12 +76,16 @@ func (conn *Connection) AttachPTY(localDev string, exec string) error {
 	return err
 }
 
+func (conn *Connection) Wait() {
+	conn.wg.Wait()
+}
+
 func (conn *Connection) Close() error {
 	for _, session := range conn.sessions {
 		if p, ok := session.Stdin.(*port); ok {
 			p.ClosePTY()
 		}
-		session.Signal(ssh.SIGINT)
+		go func(session *ssh.Session) { session.Signal(ssh.SIGINT) }(session)
 		session.Close()
 	}
 	conn.sessions = nil
@@ -141,7 +157,11 @@ func (conn *Connection) hostKeyCallback(hostname string, remote net.Addr, key ss
 
 func Connect(hostname string, options ...ConfigOption) (*Connection, error) {
 	config := &Config{
-		port: 22,
+		port:      22,
+		keepAlive: time.Second * 60,
+		clientConfig: ssh.ClientConfig{
+			Timeout: time.Second * 5,
+		},
 	}
 
 	for _, option := range options {
@@ -183,5 +203,18 @@ func Connect(hostname string, options ...ConfigOption) (*Connection, error) {
 
 	var err error
 	conn.Client, err = ssh.Dial("tcp", fmt.Sprintf("%s:%d", hostname, config.port), &config.clientConfig)
+	if err == nil && config.keepAlive > 0 {
+		go func() {
+			for {
+				<-time.After(config.keepAlive)
+				println("Sending keep alive")
+				_, _, err := conn.Client.SendRequest("rcom keep alive", true, nil)
+				if err != nil {
+					conn.Close()
+					return
+				}
+			}
+		}()
+	}
 	return conn, err
 }
