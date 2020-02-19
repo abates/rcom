@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"time"
 
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/terminal"
@@ -18,6 +19,7 @@ type Config struct {
 	acceptNew  bool // acceptNew entries to known_hosts
 	port       int
 	knownHosts string
+	keepAlive  time.Duration
 
 	identityAuth ssh.AuthMethod
 	passwordAuth ssh.AuthMethod
@@ -107,6 +109,20 @@ func PasswordAuth() ConfigOption {
 			fmt.Fprintf(os.Stdout, "\n")
 			return string(pass), err
 		})
+		return nil
+	}
+}
+
+func Timeout(timeout time.Duration) ConfigOption {
+	return func(config *Config) error {
+		config.clientConfig.Timeout = timeout
+		return nil
+	}
+}
+
+func KeepAlive(period time.Duration) ConfigOption {
+	return func(config *Config) error {
+		config.keepAlive = period
 		return nil
 	}
 }
