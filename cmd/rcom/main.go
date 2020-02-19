@@ -39,7 +39,6 @@ var (
 	bitsize        = 4096
 	keyfile        = ""
 	authorizedKeys = ""
-	forceLink      = false
 )
 
 func setConnectionFlags(fs *flag.FlagSet) {
@@ -95,7 +94,6 @@ func init() {
 		cli.CallbackOption(serverCmd),
 	)
 	server.Arguments.String(&localDev, "device path")
-	server.Flags.BoolVar(&forceLink, "f", false, "Remove symlink if it already exists")
 
 	key := app.SubCommand("key",
 		cli.UsageOption("<command> [options]"),
@@ -152,9 +150,9 @@ func clientCb(string) error {
 			if debug {
 				exec = fmt.Sprintf("%s -debug", exec)
 			}
-			exec = fmt.Sprintf("%s server -f %s", exec, remotedev)
+			exec = fmt.Sprintf("%s server %s", exec, remotedev)
 		}
-		err = client.AttachPTY(localdev, forceLink, exec)
+		err = client.AttachPTY(localdev, exec)
 		if err != nil {
 			break
 		}
@@ -168,7 +166,7 @@ func clientCb(string) error {
 }
 
 func serverCmd(string) error {
-	return rcom.Server(localDev, forceLink)
+	return rcom.Server(localDev)
 }
 
 func genCmd(string) error {

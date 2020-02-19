@@ -1,7 +1,6 @@
 package rcom
 
 import (
-	"fmt"
 	"os"
 	"syscall"
 
@@ -23,23 +22,11 @@ func (p *port) Write(buf []byte) (n int, err error) {
 	return p.pty.Write(buf)
 }
 
-func newPort(device string, forceLink bool) (p *port, err error) {
+func newPort(device string) (p *port, err error) {
+	Logger.Printf("Opening port %s", device)
 	p = &port{}
 
-	var fi os.FileInfo
-	if fi, err = os.Stat(device); err == nil {
-		if mode := fi.Mode(); mode&os.ModeSymlink == os.ModeSymlink {
-			if forceLink {
-				err = os.Remove(device)
-				if err != nil {
-					return nil, err
-				}
-			} else {
-				return nil, fmt.Errorf("Symlink %s already exists")
-			}
-		}
-	}
-	if _, err = os.Stat(device); err != nil {
+	if _, err = os.Lstat(device); err != nil {
 		if os.IsNotExist(err) {
 			err = nil
 			p.pty, p.tty, err = pty.Open()
@@ -48,20 +35,19 @@ func newPort(device string, forceLink bool) (p *port, err error) {
 				Logger.Printf("Failed to activate RAW mode on pty: %v", err)
 				return nil, err
 			}
+
+			Logger.Printf("Linking pty %s to %s", p.tty.Name(), device)
+			err = os.Symlink(p.tty.Name(), device)
 			if err == nil {
-				err = os.Symlink(p.tty.Name(), device)
-				if err == nil {
-					p.linkName = device
-				} else {
-					Logger.Printf("Failed to link %s to %s", p.tty.Name(), device)
-				}
+				p.linkName = device
 			} else {
-				Logger.Printf("Failed to open pty")
+				Logger.Printf("Failed to link %s to %s", p.tty.Name(), device)
 			}
 		}
 	} else {
 		p.pty, err = os.OpenFile(device, os.O_RDWR|syscall.O_NOCTTY|syscall.O_NONBLOCK, 0)
 	}
+
 	return p, err
 }
 

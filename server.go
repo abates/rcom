@@ -22,9 +22,9 @@ func (r reader) Read(p []byte) (n int, err error) {
 	return n, err
 }
 
-func Server(linkname string, forceLink bool) error {
+func Server(linkname string) error {
 	Logger.Printf("Connecting server to %s", linkname)
-	p, err := newPort(linkname, forceLink)
+	p, err := newPort(linkname)
 	if err != nil {
 		return err
 	}
