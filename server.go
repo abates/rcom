@@ -29,20 +29,13 @@ func Server(linkname string) error {
 
 	var wg sync.WaitGroup
 
-	wg.Add(1)
 	go func() {
-		_, err := io.Copy(p, os.Stdin)
-		if err != nil {
-			Logger.Printf("Failed to copy from Stdin: %v", err)
-		}
-		Logger.Printf("Stdin done")
-		wg.Done()
+		io.Copy(p, os.Stdin)
 	}()
 
 	wg.Add(1)
 	go func() {
-		_, err = io.Copy(os.Stdout, p)
-		Logger.Printf("Stdout done")
+		io.Copy(os.Stdout, p)
 		wg.Done()
 	}()
 
