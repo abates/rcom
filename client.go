@@ -6,7 +6,7 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-func Client(localDev, hostname, remoteDev string, options ...ConfigOption) error {
+func Client(localDev, hostname, remoteDev string, forceLink bool, options ...ConfigOption) error {
 	config := &Config{
 		exec: "rcom",
 	}
@@ -15,8 +15,7 @@ func Client(localDev, hostname, remoteDev string, options ...ConfigOption) error
 		option(config)
 	}
 
-	p := &port{filename: localDev}
-	err := p.setup()
+	p, err := newPort(localDev, forceLink)
 	if err != nil {
 		return err
 	}

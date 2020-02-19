@@ -6,9 +6,8 @@ import (
 	"sync"
 )
 
-func Server(linkname string) error {
-	p := &port{filename: linkname}
-	err := p.setup()
+func Server(linkname string, forceLink bool) error {
+	p, err := newPort(linkname, forceLink)
 	if err != nil {
 		return err
 	}

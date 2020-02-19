@@ -107,7 +107,7 @@ func main() {
 }
 
 func clientCmd(string) error {
-	return rcom.Client(localDev, hostname, remoteDev, rcom.Login(username), rcom.Port(port), rcom.IdentityFile(identity), rcom.Accept(acceptNew), rcom.Exec(exec))
+	return rcom.Client(localDev, hostname, remoteDev, forceLink, rcom.Login(username), rcom.Port(port), rcom.IdentityFile(identity), rcom.Accept(acceptNew), rcom.Exec(exec))
 }
 
 func serverCmd(string) error {
