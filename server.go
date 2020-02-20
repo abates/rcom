@@ -43,7 +43,8 @@ func Server(linkname string) error {
 	signal.Notify(ch, syscall.SIGTERM, syscall.SIGINT)
 	closed := false
 	go func() {
-		<-ch
+		sig := <-ch
+		Logger.Printf("Server received %v", sig)
 		p.CloseTTY()
 		closed = true
 	}()

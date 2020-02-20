@@ -132,9 +132,10 @@ func clientCb(string) error {
 	}
 
 	ch := make(chan os.Signal, 2)
-	signal.Notify(ch, os.Interrupt, syscall.SIGINT)
+	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
-		<-ch
+		sig := <-ch
+		rcom.Logger.Printf("Client received %v", sig)
 		client.Close()
 		os.Exit(0)
 	}()
