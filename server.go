@@ -4,7 +4,6 @@ import (
 	"io"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
 )
 
@@ -27,16 +26,15 @@ func Server(linkname string) error {
 		return err
 	}
 
-	var wg sync.WaitGroup
-
+	done := make(chan interface{}, 3)
 	go func() {
 		io.Copy(p, os.Stdin)
+		done <- true
 	}()
 
-	wg.Add(1)
 	go func() {
 		io.Copy(os.Stdout, p)
-		wg.Done()
+		done <- true
 	}()
 
 	ch := make(chan os.Signal, 2)
@@ -47,8 +45,9 @@ func Server(linkname string) error {
 		Logger.Printf("Server received %v", sig)
 		p.CloseTTY()
 		closed = true
+		done <- true
 	}()
-	wg.Wait()
+	<-done
 	if !closed {
 		p.CloseTTY()
 	}
