@@ -40,7 +40,7 @@ func Server(linkname string) error {
 	}()
 
 	ch := make(chan os.Signal, 2)
-	signal.Notify(ch, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
+	signal.Notify(ch, syscall.SIGTERM, syscall.SIGINT)
 	closed := false
 	go func() {
 		<-ch

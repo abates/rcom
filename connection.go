@@ -82,10 +82,10 @@ func (conn *Connection) Wait() {
 
 func (conn *Connection) Close() error {
 	for _, session := range conn.sessions {
+		session.Signal(ssh.SIGINT)
 		if p, ok := session.Stdin.(*port); ok {
 			p.ClosePTY()
 		}
-		go func(session *ssh.Session) { session.Signal(ssh.SIGINT) }(session)
 		session.Close()
 	}
 	conn.sessions = nil
