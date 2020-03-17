@@ -22,9 +22,16 @@ func (p *port) Write(buf []byte) (n int, err error) {
 	return p.pty.Write(buf)
 }
 
-func newPort(device string) (p *port, err error) {
+func newPort(device string, force bool) (p *port, err error) {
 	Logger.Printf("Opening port %s", device)
 	p = &port{}
+
+	if force {
+		err = os.RemoveAll(device)
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	if _, err = os.Stat(device); err != nil {
 		if os.IsNotExist(err) {

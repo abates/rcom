@@ -56,9 +56,9 @@ func (conn *Connection) Start(exec string, stdin io.Reader, stdout io.Writer, st
 	return session, err
 }
 
-func (conn *Connection) AttachPTY(localDev string, exec string) error {
+func (conn *Connection) AttachPTY(localDev string, exec string, force bool) error {
 	Logger.Printf("Attaching to local port %s", localDev)
-	p, err := newPort(localDev)
+	p, err := newPort(localDev, force)
 	if err != nil {
 		Logger.Printf("Failed to attach to port %s: %v", localDev, err)
 		p.ClosePTY()

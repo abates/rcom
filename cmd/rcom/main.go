@@ -31,6 +31,8 @@ var (
 	localDev  = ""
 	debug     = false
 
+	forceLink      = false
+	forceRemote    = false
 	username       = ""
 	port           = 22
 	identity       = ""
@@ -86,14 +88,17 @@ func init() {
 		cli.CallbackOption(clientCb),
 	)
 	setConnectionFlags(&clientCmd.Flags)
+	clientCmd.Flags.BoolVar(&forceLink, "f", false, "Force link. Remove link if it exists.")
+	clientCmd.Flags.BoolVar(&forceRemote, "fr", false, "Force remote link. Remove remote link if it exists.")
 	clientCmd.Arguments.String(&hostname, "remote hostname")
 
-	server := app.SubCommand("server",
+	serverCmd := app.SubCommand("server",
 		cli.UsageOption("<local device>"),
 		cli.DescOption("Start server mode"),
-		cli.CallbackOption(serverCmd),
+		cli.CallbackOption(serverCb),
 	)
-	server.Arguments.String(&localDev, "device path")
+	serverCmd.Flags.BoolVar(&forceLink, "f", false, "Force link. Remove link if it exists.")
+	serverCmd.Arguments.String(&localDev, "device path")
 
 	key := app.SubCommand("key",
 		cli.UsageOption("<command> [options]"),
@@ -141,19 +146,24 @@ func clientCb(string) error {
 	}()
 
 	for _, device := range clientCmd.Arguments.Args() {
-		localdev, remotedev := device, device
+		localDev, remoteDev := device, device
 		if strings.Contains(device, ":") {
 			s := strings.Split(device, ":")
-			localdev, remotedev = s[0], s[1]
+			localDev, remoteDev = s[0], s[1]
 		}
 
 		if strings.HasSuffix(exec, DefaultExec) {
 			if debug {
 				exec = fmt.Sprintf("%s -debug", exec)
 			}
-			exec = fmt.Sprintf("%s server %s", exec, remotedev)
+
+			exec = fmt.Sprintf("%s server", exec)
+			if forceRemote {
+				exec = fmt.Sprintf("%s -f", exec)
+			}
+			exec = fmt.Sprintf("%s %s", exec, remoteDev)
 		}
-		err = client.AttachPTY(localdev, exec)
+		err = client.AttachPTY(localDev, exec, forceLink)
 		if err != nil {
 			break
 		}
@@ -166,8 +176,8 @@ func clientCb(string) error {
 	return err
 }
 
-func serverCmd(string) error {
-	return rcom.Server(localDev)
+func serverCb(string) error {
+	return rcom.Server(localDev, forceLink)
 }
 
 func genCmd(string) error {
