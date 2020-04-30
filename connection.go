@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"net"
 	"os"
 	"os/user"
@@ -33,6 +34,25 @@ func (conn *Connection) Run(exec string, stdin io.Reader, stdout io.Writer, stde
 	return err
 }*/
 
+type logWriter struct {
+	io.Writer
+}
+
+func (lw logWriter) Write(p []byte) (int, error) {
+	log.Printf("Write: %s", string(p))
+	return lw.Writer.Write(p)
+}
+
+type logReader struct {
+	io.Reader
+}
+
+func (lr logReader) Read(p []byte) (n int, err error) {
+	n, err = lr.Reader.Read(p)
+	log.Printf(" Read: %s", string(p[0:n]))
+	return
+}
+
 func (conn *Connection) Start(exec string, stdin io.Reader, stdout io.Writer, stderr io.Writer) (*ssh.Session, error) {
 	session, err := conn.NewSession()
 	if err != nil {
@@ -40,8 +60,10 @@ func (conn *Connection) Start(exec string, stdin io.Reader, stdout io.Writer, st
 		return nil, err
 	}
 
-	session.Stdin = stdin
-	session.Stdout = stdout
+	//session.Stdin = stdin
+	session.Stdin = logReader{stdin}
+	//session.Stdout = stdout
+	session.Stdout = logWriter{stdout}
 	session.Stderr = stderr
 	err = session.Start(exec)
 	if err == nil {

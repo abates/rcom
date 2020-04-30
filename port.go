@@ -53,6 +53,12 @@ func newPort(device string, force bool) (p *port, err error) {
 		}
 	} else {
 		p.pty, err = os.OpenFile(device, os.O_RDWR|syscall.O_NOCTTY|syscall.O_NONBLOCK, 0)
+		if err == nil {
+			_, err = terminal.MakeRaw(int(p.pty.Fd()))
+			if err != nil {
+				Logger.Printf("Failed to activate RAW mode on serial port: %v", err)
+			}
+		}
 	}
 
 	return p, err
