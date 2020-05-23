@@ -43,12 +43,18 @@ func newPort(device string, force bool) (p *port, err error) {
 				return nil, err
 			}
 
-			Logger.Printf("Linking pty %s to %s", p.tty.Name(), device)
-			err = os.Symlink(p.tty.Name(), device)
+			err = os.Chmod(p.tty.Name(), 0660)
 			if err == nil {
-				p.linkName = device
+				Logger.Printf("Linking pty %s to %s", p.tty.Name(), device)
+				err = os.Symlink(p.tty.Name(), device)
+				if err == nil {
+					p.linkName = device
+				} else {
+					Logger.Printf("Failed to link %s to %s", p.tty.Name(), device)
+				}
 			} else {
-				Logger.Printf("Failed to link %s to %s", p.tty.Name(), device)
+				Logger.Printf("Failed to set user/group read/write on %s", p.tty.Name())
+				return nil, err
 			}
 		}
 	} else {
